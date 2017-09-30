@@ -44,5 +44,5 @@ class StudentList15(StudentList):
         '''
         print the info in decending order
         '''
-       for stdid, stdname in sorted(self.studen_list.items(), reverse=True):
+        for stdid, stdname in sorted(self.studen_list.items(), reverse=True):
             print(stdid, stdname) 
