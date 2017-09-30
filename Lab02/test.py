@@ -5,6 +5,7 @@ test all the class and function
 import unittest
 from StudentList import StudentList, StudentList15
 from Textprocessor import Textprocessor
+from NetworkSolution import NetworkSolution
 
 
 class TestStudentList(unittest.TestCase):
@@ -45,8 +46,18 @@ class TestStudentList(unittest.TestCase):
         textprocessor.read_print_all()
         textprocessor.delete_text(7, 4)
         textprocessor.read_print_all()
-        textprocessor.edit_text(0,"sustech")
+        textprocessor.edit_text(0, "sustech")
         textprocessor.read_print_all()
+
+    def test_solution3(self):
+        '''
+        question3
+        filesize: 160MB
+        '''
+        solutioninst = NetworkSolution(160e6 * 8)
+        print(solutioninst.get_answer1(),
+              solutioninst.get_answer2(), solutioninst.get_answer3())
+
 
 if __name__ == "__main__":
     unittest.main()
