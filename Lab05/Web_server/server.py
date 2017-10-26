@@ -58,12 +58,13 @@ class Request(object):
     def __repr__(self):
         return repr({'method': self._method, 'path': self._path, 'protocol': self._protocol, 'headers': self._headers})
 
+
 class Response(object):
     def __init__(self, filename):
         self.not_found = False
         try:
-            self.file = open('.'+filename,mode='rb')
-            self.filename = '.'+filename
+            self.file = open('.' + filename, mode='rb')
+            self.filename = '.' + filename
         except IOError:
             self.not_found = True
             self.file = open('./Err404.html', mode='rb')
@@ -71,7 +72,6 @@ class Response(object):
         finally:
             self.filelen = int(os.stat(self.filename).st_size)
             # print(self.filelen, self.not_found)
-        
 
     def get_resp_header(self):
         now = datetime.now()
@@ -80,23 +80,22 @@ class Response(object):
 
         if self.not_found:
             header = "HTTP/1.1 404 Not Found\r\n" + \
-            "Server: nginx\r\n" +\
-            "Date: %s\r\n" % timestr +\
-            "Content-Type: text/html\r\n" +\
-            "Content-Length: %d\r\n" % self.filelen +\
-            "Connection: keep-alive\r\n\r\n"
+                "Server: nginx\r\n" +\
+                "Date: %s\r\n" % timestr +\
+                "Content-Type: text/html\r\n" +\
+                "Content-Length: %d\r\n" % self.filelen +\
+                "Connection: keep-alive\r\n\r\n"
             return header
 
-
         header = "HTTP/1.1 200 OK\r\n" +\
-        "Date: %s\r\n" % timestr +\
-        "Server: nginx\r\n" +\
-        "Last-Modified: %s\r\n" % timestr +\
-        "Accept-Ranges: bytes\r\n" +\
-        "Content-Length: %d\r\n" % self.filelen +\
-        "Keep-Alive: timeout=5, max=100\r\n" +\
-        "Connection: Keep-Alive\r\n" +\
-        "Content-Type: text/plain; charset=UTF-8\r\n\r\n"
+            "Date: %s\r\n" % timestr +\
+            "Server: nginx\r\n" +\
+            "Last-Modified: %s\r\n" % timestr +\
+            "Accept-Ranges: bytes\r\n" +\
+            "Content-Length: %d\r\n" % self.filelen +\
+            "Keep-Alive: timeout=5, max=100\r\n" +\
+            "Connection: Keep-Alive\r\n" +\
+            "Content-Type: text/plain; charset=UTF-8\r\n\r\n"
         return header
 
     def send_file(self, connection):
@@ -131,7 +130,7 @@ def main():
                 # the rest of the clause is skipped
                 # If the exception type matches the word after except
                 # the except clause is executed
-                
+
                 # Receives the request message from the client
                 # connection-oriented
                 # For best match with hardware and network realities
@@ -142,7 +141,8 @@ def main():
                 http_request = Request(http_request)
                 # print(repr(http_request), http_request.getpath())
                 resp = Response(http_request.getpath())
-                print("Request from %s, path: %s" % (addr, http_request.getpath()))
+                print("Request from %s, path: %s" %
+                      (addr, http_request.getpath()))
                 header = resp.get_resp_header()
                 # print(header)
                 connection_socket.send(header.encode())
