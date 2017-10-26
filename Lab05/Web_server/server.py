@@ -9,10 +9,11 @@ from socket import SOCK_STREAM
 from wsgiref.handlers import format_date_time
 from datetime import datetime
 from time import mktime
+import os
 
 # Put in your codes here to create a TCP sever socket
 # and bind it to your server address and port number
-HOST, PORT_NUM = "127.0.0.1", 1025
+HOST, PORT_NUM = "127.0.0.1", 1024
 
 CLRF = '\r\n'
 
@@ -59,47 +60,51 @@ class Request(object):
 
 class Response(object):
     def __init__(self, filename):
-        self.filename = filename
         self.not_found = False
         try:
-            self.file = open('.'+filename,mode='r')
+            self.file = open('.'+filename,mode='rb')
+            self.filename = '.'+filename
         except IOError:
             self.not_found = True
+            self.file = open('./Err404.html', mode='rb')
+            self.filename = './Err404.html'
+        finally:
+            self.filelen = int(os.stat(self.filename).st_size)
+            # print(self.filelen, self.not_found)
+        
 
     def get_resp_header(self):
-        if self.not_found:
-            header = '''
-            HTTP/1.1 404 Not Found
-            Server: nginx
-            Date: Wed, 25 Oct 2017 18:16:34 GMT
-            Content-Type: text/html
-            Content-Length: 479
-            Connection: keep-alive
-            '''
-            return header
-
         now = datetime.now()
         stamp = mktime(now.timetuple())
-        # format_date_time(stamp)
-        header = '''
-        HTTP/1.1 %s
-        Date: %d
-        Server: nginx
-        Last-Modified: %d
-        Accept-Ranges: bytes
-        Content-Length: %d
-        Keep-Alive: timeout=5, max=100
-        Connection: Keep-Alive
-        Content-Type: text/plain; charset=UTF-8\r\n
-        '''
+        timestr = format_date_time(stamp)
+
+        if self.not_found:
+            header = "HTTP/1.1 404 Not Found\r\n" + \
+            "Server: nginx\r\n" +\
+            "Date: %s\r\n" % timestr +\
+            "Content-Type: text/html\r\n" +\
+            "Content-Length: %d\r\n" % self.filelen +\
+            "Connection: keep-alive\r\n\r\n"
+            return header
+
+
+        header = "HTTP/1.1 200 OK\r\n" +\
+        "Date: %s\r\n" % timestr +\
+        "Server: nginx\r\n" +\
+        "Last-Modified: %s\r\n" % timestr +\
+        "Accept-Ranges: bytes\r\n" +\
+        "Content-Length: %d\r\n" % self.filelen +\
+        "Keep-Alive: timeout=5, max=100\r\n" +\
+        "Connection: Keep-Alive\r\n" +\
+        "Content-Type: text/plain; charset=UTF-8\r\n\r\n"
         return header
 
-    def send_file(self):
-        if self.not_found:
-            # Send HTTP response message for file not found
-            pass
-        else:
-            pass
+    def send_file(self, connection):
+        # Send HTTP content body
+        buff = self.file.read(1024)
+        while (buff):
+            connection.send(buff)
+            buff = self.file.read(1024)
 
 
 def main():
@@ -121,7 +126,7 @@ def main():
             try:
                 print('Ready to serve...')
                 # Set up a new connection from the client
-                connection_socket, _ = server_socket.accept()
+                connection_socket, addr = server_socket.accept()
                 # If an exception occurs during the execution of try clause
                 # the rest of the clause is skipped
                 # If the exception type matches the word after except
@@ -135,12 +140,13 @@ def main():
                 http_request = connection_socket.recv(1024).decode()
                 # print(http_request)
                 http_request = Request(http_request)
-                print(repr(http_request), http_request.getpath())
+                # print(repr(http_request), http_request.getpath())
                 resp = Response(http_request.getpath())
+                print("Request from %s, path: %s" % (addr, http_request.getpath()))
                 header = resp.get_resp_header()
-                print(header)
-                connection_socket.send(header)
-                resp.send_file()
+                # print(header)
+                connection_socket.send(header.encode())
+                resp.send_file(connection_socket)
             finally:
                 connection_socket.close()
     finally:
