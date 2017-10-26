@@ -60,6 +60,9 @@ class Request(object):
 
 
 class Response(object):
+    '''
+    Process the response of http
+    '''
     def __init__(self, filename):
         self.not_found = False
         try:
@@ -74,10 +77,15 @@ class Response(object):
             # print(self.filelen, self.not_found)
 
     def get_resp_header(self):
+        '''
+        return the http header
+        '''
+        # get fommated time
         now = datetime.now()
         stamp = mktime(now.timetuple())
         timestr = format_date_time(stamp)
 
+        # 404 header
         if self.not_found:
             header = "HTTP/1.1 404 Not Found\r\n" + \
                 "Server: nginx\r\n" +\
@@ -86,7 +94,8 @@ class Response(object):
                 "Content-Length: %d\r\n" % self.filelen +\
                 "Connection: keep-alive\r\n\r\n"
             return header
-
+        
+        # 200 OK header
         header = "HTTP/1.1 200 OK\r\n" +\
             "Date: %s\r\n" % timestr +\
             "Server: nginx\r\n" +\
@@ -99,6 +108,9 @@ class Response(object):
         return header
 
     def send_file(self, connection):
+        '''
+        send the main body
+        '''
         # Send HTTP content body
         buff = self.file.read(1024)
         while (buff):
@@ -122,15 +134,14 @@ def main():
     # Server should be up and running and listening to the incoming connections
     try:
         while True:
+            # If an exception occurs during the execution of try clause
+            # the rest of the clause is skipped
+            # If the exception type matches the word after except
+            # the except clause is executed
             try:
                 print('Ready to serve...')
                 # Set up a new connection from the client
                 connection_socket, addr = server_socket.accept()
-                # If an exception occurs during the execution of try clause
-                # the rest of the clause is skipped
-                # If the exception type matches the word after except
-                # the except clause is executed
-
                 # Receives the request message from the client
                 # connection-oriented
                 # For best match with hardware and network realities

@@ -20,3 +20,7 @@ If a browser requests a file that is not present in your server, your server sho
 Ability to display text with Chinese and English at the same time
 
 ## Reference
+
+[Python-filestate](https://docs.python.org/2/library/os.html#os.stat)
+
+[rfc-7230](https://tools.ietf.org/html/rfc7230)
