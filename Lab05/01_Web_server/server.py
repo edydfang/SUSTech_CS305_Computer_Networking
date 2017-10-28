@@ -35,7 +35,7 @@ class Request(object):
         '''
         if self._path == "/":
             # default index.html
-            return "/index.html"
+            self._path = "/index.html"
         return self._path, self.start_byte
 
     def parse_request(self):
@@ -56,7 +56,7 @@ class Request(object):
                 r"Range: bytes=(\d*)-(\d*)", self._raw_request)
             # print(re_result)
             if re_result != None:
-                print(re_result.group(1), re_result.group(2))
+                # print(re_result.group(1), re_result.group(2))
                 self.start_byte = int(re_result.group(1))
 
         # Figure out our request method, path, and which version of HTTP we're using
@@ -133,6 +133,7 @@ class Response(object):
 
         if self.status == 206:
             header = "HTTP/1.1 206 Partial Content\r\n" +\
+                "Accept-Ranges: bytes\r\n" +\
                 "Content-Range: bytes %d-%d/%d\r\n" \
                 % (self.offset, self.filelen - 1, self.filelen) +\
                 "Content-Length: %d\r\n" % (self.filelen - self.offset) +\
@@ -156,16 +157,25 @@ class Response(object):
         '''
         send the main body
         '''
+        if self.status == 404:
+            return
         # Send HTTP content body
-        if self.offset < self.filelen:
+        if self.offset <= self.filelen:
             self.file.seek(self.offset)
+        else:
+            return
         buff = self.file.read(1024)
         total = 0
         while buff:
             total += len(buff)
-            connection.send(buff)
+            try:
+                connection.send(buff)
+            except BrokenPipeError as err:
+                print("Detected remote disconnect", err)
+                break
             buff = self.file.read(1024)
         print(total, self.filename)
+        self.file.close()
         return
 
 
