@@ -31,14 +31,14 @@ If a browser requests a file that is not present in your server, your server sho
 
 ## Assignment 02 An online chat program
 
-## Requirements
+### Requirements
 
 - Real-time message sending and displaying
 - Display the sender
 - Multithread
 - UDP
 
-## Additional Requirements
+### Additional Requirements
 
 - client - client or client - server
 - Graphic User Interface
