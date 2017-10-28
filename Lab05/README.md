@@ -29,7 +29,7 @@ If a browser requests a file that is not present in your server, your server sho
 - [206 PARTIAL CONTENT](https://httpstatuses.com/206)
 - [HTML Demo](https://www.w3schools.com/)
 
-## An online chat program
+## Assignment 02 An online chat program
 
 ## Requirements
 
