@@ -6,6 +6,7 @@ This is a socket implementation of http server
 from socket import socket
 from socket import AF_INET
 from socket import SOCK_STREAM
+from socket import SOL_SOCKET, SO_REUSEADDR
 from wsgiref.handlers import format_date_time
 from datetime import datetime
 from time import mktime
@@ -32,15 +33,31 @@ class Request(object):
         '''
         return the url path
         '''
-        return self._path
+        if self._path == "/":
+            # default index.html
+            return "/index.html"
+        return self._path, self.start_byte
 
     def parse_request(self):
         '''
         trun request into structured data
         '''
         temp = [i.strip() for i in self._raw_request.splitlines()]
+        self.start_byte = -1
         if -1 == temp[0].find('HTTP'):
             raise Exception('Incorrect Protocol')
+
+        # Extract the range part of http request
+        if -1 != self._raw_request.find('\r\nRange'):
+            import re
+            # print(self._raw_request)
+            # r"Range: bytes=(\d*)-(\d*)"
+            re_result = re.search(
+                r"Range: bytes=(\d*)-(\d*)", self._raw_request)
+            # print(re_result)
+            if re_result != None:
+                print(re_result.group(1), re_result.group(2))
+                self.start_byte = int(re_result.group(1))
 
         # Figure out our request method, path, and which version of HTTP we're using
         method, path, protocol = [i.strip() for i in temp[0].split()]
@@ -56,20 +73,27 @@ class Request(object):
         return method, path, protocol, headers
 
     def __repr__(self):
-        return repr({'method': self._method, 'path': self._path, 'protocol': self._protocol, 'headers': self._headers})
+        return repr({'method': self._method, 'path': self._path,
+                     'protocol': self._protocol, 'headers': self._headers})
 
 
 class Response(object):
     '''
     Process the response of http
     '''
-    def __init__(self, filename):
-        self.not_found = False
+
+    def __init__(self, filedes):
+        self.status = 200
+        self.offset = 0
+        # Range request and partial responce if filedes>=0
+        if filedes[1] >= 0:
+            self.status = 206
+            self.offset = filedes[1]
         try:
-            self.file = open('.' + filename, mode='rb')
-            self.filename = '.' + filename
+            self.file = open('.' + filedes[0], mode='rb')
+            self.filename = '.' + filedes[0]
         except IOError:
-            self.not_found = True
+            self.status = 404
             self.file = open('./Err404.html', mode='rb')
             self.filename = './Err404.html'
         finally:
@@ -86,7 +110,7 @@ class Response(object):
         timestr = format_date_time(stamp)
 
         # 404 header
-        if self.not_found:
+        if self.status == 404:
             header = "HTTP/1.1 404 Not Found\r\n" + \
                 "Server: nginx\r\n" +\
                 "Date: %s\r\n" % timestr +\
@@ -94,28 +118,55 @@ class Response(object):
                 "Content-Length: %d\r\n" % self.filelen +\
                 "Connection: keep-alive\r\n\r\n"
             return header
-        
-        # 200 OK header
-        header = "HTTP/1.1 200 OK\r\n" +\
-            "Date: %s\r\n" % timestr +\
-            "Server: nginx\r\n" +\
-            "Last-Modified: %s\r\n" % timestr +\
-            "Accept-Ranges: bytes\r\n" +\
-            "Content-Length: %d\r\n" % self.filelen +\
-            "Keep-Alive: timeout=5, max=100\r\n" +\
-            "Connection: Keep-Alive\r\n" +\
-            "Content-Type: text/plain; charset=UTF-8\r\n\r\n"
-        return header
+        if self.status == 200:
+            # 200 OK header
+            header = "HTTP/1.1 200 OK\r\n" +\
+                "Date: %s\r\n" % timestr +\
+                "Server: nginx\r\n" +\
+                "Last-Modified: %s\r\n" % timestr +\
+                "Accept-Ranges: bytes\r\n" +\
+                "Content-Length: %d\r\n" % self.filelen +\
+                "Keep-Alive: timeout=5, max=100\r\n" +\
+                "Connection: Keep-Alive\r\n" +\
+                "Content-Type: %s; charset=UTF-8\r\n\r\n" % self.get_content_type()
+            return header
+
+        if self.status == 206:
+            header = "HTTP/1.1 206 Partial Content\r\n" +\
+                "Content-Range: bytes %d-%d/%d\r\n" \
+                % (self.offset, self.filelen - 1, self.filelen) +\
+                "Content-Length: %d\r\n" % (self.filelen - self.offset) +\
+                "Content-Type: %s\r\n\r\n" % self.get_content_type()
+            return header
+
+    def get_content_type(self):
+        '''
+        Use built in function to get filetype and map them
+        '''
+        _, extension = os.path.splitext(self.filename)
+        mapping = {'html': 'text/html', 'htm': 'text/html', 'txt': 'text/plain',
+                   'mp4': 'video/mp4', 'ogg': 'audio/ogg', 'mp3': 'audio/mpeg', 'jpg': 'image/jpeg'}
+        print(extension)
+        if extension[1:] in mapping.keys():
+            return mapping[extension[1:]]
+        else:
+            return 'text/plain'
 
     def send_file(self, connection):
         '''
         send the main body
         '''
         # Send HTTP content body
+        if self.offset < self.filelen:
+            self.file.seek(self.offset)
         buff = self.file.read(1024)
-        while (buff):
+        total = 0
+        while buff:
+            total += len(buff)
             connection.send(buff)
             buff = self.file.read(1024)
+        print(total, self.filename)
+        return
 
 
 def main():
@@ -126,7 +177,9 @@ def main():
     server_socket = socket(AF_INET, SOCK_STREAM)
     try:
         # Bind the socket to server address and server port
-        server_socket.bind((HOST, PORT_NUM))
+        #server_socket.bind((HOST, PORT_NUM))
+        server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        server_socket.bind(('192.168.111.147', 1024))
         server_socket.listen(10)
     except OSError:
         print("Port number in use. Exiting....")
@@ -134,6 +187,7 @@ def main():
     # Server should be up and running and listening to the incoming connections
     try:
         while True:
+            connection_socket = None
             # If an exception occurs during the execution of try clause
             # the rest of the clause is skipped
             # If the exception type matches the word after except
@@ -159,7 +213,8 @@ def main():
                 connection_socket.send(header.encode())
                 resp.send_file(connection_socket)
             finally:
-                connection_socket.close()
+                if connection_socket:
+                    connection_socket.close()
     finally:
         # Put your code here to close the socket
         server_socket.close()
