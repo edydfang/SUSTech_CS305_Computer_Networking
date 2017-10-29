@@ -46,8 +46,10 @@ If a browser requests a file that is not present in your server, your server sho
 ### Reference
 
 - [Tkinker Book](http://effbot.org/tkinterbook/)
+- [GUI POLLING](http://effbot.org/tkinterbook/widget.htm#Tkinter.Widget.after-method)
 - [select — Waiting for I/O completion](https://docs.python.org/3.6/library/select.html)
 - [selectors — High-level I/O multiplexing](https://docs.python.org/3.6/library/selectors.html#module-selectors)
 - [NETWORK PROGRAMMING II - CHAT SERVER & CLIENT](http://www.bogotobogo.com/python/python_network_programming_tcp_server_client_chat_server_chat_client_select.php)
+- [Python threads: communication and stopping](https://eli.thegreenplace.net/2011/12/27/python-threads-communication-and-stopping)
 
 
