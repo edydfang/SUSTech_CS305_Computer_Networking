@@ -56,7 +56,7 @@ class ChatServer(object):
                         # exception
                     except OSError:
                         self.broadcast(sock,
-                                       "::Server::offline::[%s:%s]" % self.addr[sock])
+                                       "::Server::offline::%s" % self.addr[sock])
                         continue
         self.server_socket.close()
 
@@ -67,11 +67,12 @@ class ChatServer(object):
         sockfd, addr = self.server_socket.accept()
         self.connection_list.append(sockfd)
         self.sel.register(sockfd, selectors.EVENT_READ)
-        self.addr[sockfd] = sockfd.getpeername()
+        self.addr[sockfd] = '[%s:%s]' %  addr
         sockfd.send(
             ("::Server::json::" + json.dumps(list(self.addr.values()))).encode())
+        print(list(self.addr.values()))
         logging.info("Client (%s, %s) connected", *addr)
-        self.broadcast(sockfd, "::Server::online::[%s:%s]" % addr)
+        self.broadcast(sockfd, "::Server::online::%s" % self.addr[sockfd])
 
     def process_message(self, sock):
         '''
@@ -90,17 +91,17 @@ class ChatServer(object):
         if data:
             # there is something in the socket
             self.broadcast(
-                sock, '\r[' + str(sock.getpeername()) + '] ' + data.decode())
+                sock, '%s' % self.addr[sock] + data.decode())
         else:
             # remove the socket that's broken
             # if sock in SOCKET_LIST:
             self.connection_list.remove(sock)
             self.sel.unregister(sock)
             addr = sock.getpeername()
-            del self.addr[sock]
             logging.info("Client (%s, %s) disconnected", *addr)
             # at this stage, no data means probably the connection has been broken
-            self.broadcast(sock, "::Server::offline::[%s:%s]" % addr)
+            self.broadcast(sock, "::Server::offline::%s" % self.addr[sock])
+            del self.addr[sock]
 
     def broadcast(self, sock, message):
         '''
