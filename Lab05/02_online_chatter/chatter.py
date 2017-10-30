@@ -6,7 +6,7 @@ A GUI chat program based on UDP protocal
 
 import tkinter as tk
 from tkinter import Message, Text, Listbox, Frame
-from tkinter import Label, Entry, Checkbutton, END, Button
+from tkinter import Label, Entry, StringVar, END, Button
 from tkinter import E, S, W, N, SE, NE, SW, NW, BOTH, DISABLED
 import socket
 import selectors
@@ -35,26 +35,45 @@ class Chatwindows(tk.Tk):
         self.organize_widgets(self.frame)
         self.input_q = input_q
         self.display_q = display_q
+        self.resizable(width=False, height=False)
 
     def organize_widgets(self, frame):
         '''
         initialize the widgets
         '''
-        self.chatbox = Text(frame, height=20, width=40, font=12)
+        self.chatbox = Text(frame, height=20, width=35, font=12)
         self.chatbox.grid(row=0, column=0, sticky=N + S + E + W)
         self.chatbox.config(state=DISABLED)
-        self.messagebox = Text(frame, height=5, width=40, font=12)
+
+        #svar = StringVar()
+        #svar.trace("w", lambda name, index, mode, sv=svar: self.messagebox_onchange(sv))
+        self.messagebox = Text(frame, height=5, width=35, font=12)
         self.messagebox.grid(row=1, column=0, sticky=N + S + E + W)
-        self.listbox = Listbox(frame)
+        # self.messagebox.bind('<<Modified>>', self.messagebox_onchange)
+
+
+        self.listbox = Listbox(frame, font=12, width=20)
         self.listbox.grid(row=0, column=1, rowspan=2, sticky=N + S + E + W)
         self.sendbutton = Button(
-            frame, text="Send", command=self.send_message, font=12, width=10, height=1)
+            frame, text="Send", command=self.send_message, font=12, width=5, height=1)
         self.sendbutton.grid(row=2, column=0)
+
+        self.serverentry = Entry(frame, width=18, font=8)
+        self.serverentry.insert(END, '127.0.0.1:7654')
+        self.serverentry.grid(row=3, column=0, sticky=W)
+        self.connbutton = Button(
+            frame, text="Connect", font=8, width=10, height=1, command=self.connect)
+        self.connbutton.grid(row=3, column=0,sticky=E)
+
+        self.statusbar = Message(frame, text='Ready to Connect', font=10,aspect=350)
+        self.statusbar.grid(row=2,rowspan=2,column=1)
+
         frame.rowconfigure(0, weight=10)
         frame.rowconfigure(1, weight=2)
         frame.rowconfigure(2, weight=1)
-        frame.columnconfigure(0, weight=5)
-        frame.columnconfigure(1, weight=2)
+        frame.columnconfigure(0, weight=2)
+        frame.columnconfigure(1, weight=3)
+
 
     def update_scaling_unit(self):
         '''
@@ -83,7 +102,14 @@ class Chatwindows(tk.Tk):
         # self.after(1000, self.update)
 
     def send_message(self):
-        self.input_q.put(self.messagebox.get("1.0", END))
+        message = self.messagebox.get("1.0", END)[:-1]
+        if message != '':
+            self.input_q.put({'cmd': 0, 'body': message})
+            self.messagebox.delete('1.0', END)
+
+    def connect(self):
+        self.statusbar.config(text = "Connecting")
+        self.input_q.put({'cmd':1, 'body':self.serverentry.get()})
 
 
 class Client(threading.Thread):
@@ -96,6 +122,8 @@ class Client(threading.Thread):
         self.input_q = input_q
         self.output_q = output_q
         self.stoprequest = threading.Event()
+        self.server_host = None
+        self.server_port = None
 
     def run(self):
         # As long as we weren't asked to stop, try to take new tasks from the
@@ -117,17 +145,22 @@ class Client(threading.Thread):
         super(Client, self).join(timeout)
 
 
-'''     
-    def __init__(self, server_host, server_port):
-        self.server_host = server_host
-        self.server_port = server_port
+    def process_input(self, inputinfo):
+        # send a message
+        if inputinfo['cmd'] == 0:
+            pass
+
+    def update_status(self, message):
+        self.output_q.put({'type':0, 'body':message})
+
+    def update_message(self, message):
+        self.output_q.put({'type':1, 'body':message})
+
+    def __connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(2)
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.sock, selectors.EVENT_READ)
-    
-    def connect(self):
-        
         # connect to remote host
         try:
             self.sock.connect((self.server_host, self.server_port))
@@ -135,6 +168,13 @@ class Client(threading.Thread):
             print('Unable to connect')
             return
         print('Connected to remote host. You can start sending messages')
+
+
+'''     
+    def __init__(self, server_host, server_port):
+
+    
+
         
 
     def listening(self):
@@ -176,7 +216,7 @@ def main():
     # client = Client(host,port)
     # client.connect()
     # client.listening()
-    thread = Client(inputq,displayq)
+    thread = Client(inputq, displayq)
     thread.start()
     window.after(0, window.update)
     window.mainloop()
