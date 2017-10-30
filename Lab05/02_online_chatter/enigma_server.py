@@ -24,6 +24,7 @@ class ChatServer(object):
         self.host = host
         self.port = port
         self.connection_list = []
+        self.addr = dict()
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket = server_socket
@@ -67,12 +68,20 @@ class ChatServer(object):
         self.sel.register(sockfd, selectors.EVENT_READ)
         logging.info("Client (%s, %s) connected", *addr)
         self.broadcast(sockfd, "[%s:%s] entered our chatting room\n" % addr)
+        self.addr[sockfd] = sockfd.getpeername()
 
     def process_message(self, sock):
         '''
         process data recieved from client
         '''
-        data = sock.recv(RECV_BUFFER)
+        try:
+            data = sock.recv(RECV_BUFFER)
+        except ConnectionError:
+            self.connection_list.remove(sock)
+            self.sel.unregister(sock)
+            logging.info("Client (%s, %s) disconnected", *self.addr[sock])
+            sock.close()
+            return
         if data:
             # there is something in the socket
             self.broadcast(

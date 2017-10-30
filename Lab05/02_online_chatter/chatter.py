@@ -51,7 +51,6 @@ class Chatwindows(tk.Tk):
         self.messagebox.grid(row=1, column=0, sticky=N + S + E + W)
         # self.messagebox.bind('<<Modified>>', self.messagebox_onchange)
 
-
         self.listbox = Listbox(frame, font=12, width=20)
         self.listbox.grid(row=0, column=1, rowspan=2, sticky=N + S + E + W)
         self.sendbutton = Button(
@@ -63,17 +62,17 @@ class Chatwindows(tk.Tk):
         self.serverentry.grid(row=3, column=0, sticky=W)
         self.connbutton = Button(
             frame, text="Connect", font=8, width=10, height=1, command=self.connect)
-        self.connbutton.grid(row=3, column=0,sticky=E)
+        self.connbutton.grid(row=3, column=0, sticky=E)
 
-        self.statusbar = Message(frame, text='Ready to Connect', font=10,aspect=350)
-        self.statusbar.grid(row=2,rowspan=2,column=1)
+        self.statusbar = Message(
+            frame, text='Ready to Connect', font=10, aspect=350)
+        self.statusbar.grid(row=2, rowspan=2, column=1)
 
         frame.rowconfigure(0, weight=10)
         frame.rowconfigure(1, weight=2)
         frame.rowconfigure(2, weight=1)
         frame.columnconfigure(0, weight=2)
         frame.columnconfigure(1, weight=3)
-
 
     def update_scaling_unit(self):
         '''
@@ -102,14 +101,14 @@ class Chatwindows(tk.Tk):
         # self.after(1000, self.update)
 
     def send_message(self):
-        message = self.messagebox.get("1.0", END)[:-1]
+        message = self.messagebox.get("1.0", END)
         if message != '':
             self.input_q.put({'cmd': 0, 'body': message})
             self.messagebox.delete('1.0', END)
 
     def connect(self):
-        self.statusbar.config(text = "Connecting")
-        self.input_q.put({'cmd':1, 'body':self.serverentry.get()})
+        self.statusbar.config(text="Connecting")
+        self.input_q.put({'cmd': 1, 'body': self.serverentry.get()})
 
 
 class Client(threading.Thread):
@@ -124,6 +123,12 @@ class Client(threading.Thread):
         self.stoprequest = threading.Event()
         self.server_host = None
         self.server_port = None
+        self.sock = None
+        self.sel = None
+        self.msg_to_send = queue.Queue()
+        self.sender = None
+        self.receiver = None
+        self.count = 0
 
     def run(self):
         # As long as we weren't asked to stop, try to take new tasks from the
@@ -135,26 +140,35 @@ class Client(threading.Thread):
             try:
                 inputinfo = self.input_q.get(True, 0.5)
                 print(inputinfo)
+                self.process_input(inputinfo)
                 #filenames = list(self._files_in_dir(dirname))
                 #self.result_q.put((self.name, dirname, filenames))
             except queue.Empty:
                 continue
 
     def join(self, timeout=None):
+        self.sender.join()
+        self.receiver.join()
+        self.sock.close()
         self.stoprequest.set()
         super(Client, self).join(timeout)
-
 
     def process_input(self, inputinfo):
         # send a message
         if inputinfo['cmd'] == 0:
+            self.msg_to_send.put(inputinfo['body'])
+        elif inputinfo['cmd'] == 1:
+            self.server_host = '127.0.0.1'
+            self.server_port = 7654
+            self.__connect()
+        elif inputinfo['cmd'] == 2:
             pass
 
     def update_status(self, message):
-        self.output_q.put({'type':0, 'body':message})
+        self.output_q.put({'cmd': 0, 'body': message})
 
     def update_message(self, message):
-        self.output_q.put({'type':1, 'body':message})
+        self.output_q.put({'cmd': 1, 'body': message})
 
     def __connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -164,44 +178,61 @@ class Client(threading.Thread):
         # connect to remote host
         try:
             self.sock.connect((self.server_host, self.server_port))
+            self.sender = Sender(self.sock, self.msg_to_send)
+            self.sender.start()
+            self.receiver = Receiver(self.sel, self.input_q)
+            self.receiver.start()
         except OSError:
             print('Unable to connect')
             return
         print('Connected to remote host. You can start sending messages')
 
 
-'''     
-    def __init__(self, server_host, server_port):
+class Sender(threading.Thread):
+    def __init__(self, sock, queue):
+        super(Sender, self).__init__()
+        self.sock = sock
+        self.input_q = queue
+        self.stoprequest = threading.Event()
 
-    
+    def run(self):
+        while not self.stoprequest.isSet():
+            try:
+                inputinfo = self.input_q.get(True, 0.5)
+                #print("sender:", inputinfo)
+                self.sock.send(inputinfo.encode())
+            except queue.Empty:
+                continue
 
-        
+    def join(self, timeout=None):
+        self.stoprequest.set()
+        super(Sender, self).join(timeout)
 
-    def listening(self):
-        while 1:
-            events = self.sel.select()
 
-            for sock, _ in events:
-                if sock == self.sock:
-                    # incoming message from remote server, s
-                    data = sock.recv(4096)
-                    if not data:
-                        print('\nDisconnected from chat server')
-                        sys.exit()
-                    else:
-                        # print data
-                        sys.stdout.write(data.decode())
-                        sys.stdout.write('[Me] ')
-                        sys.stdout.flush()
+class Receiver(threading.Thread):
+    def __init__(self, sel, queue):
+        super(Receiver, self).__init__()
+        self.sel = sel
+        self.output_q = queue
+        self.stoprequest = threading.Event()
 
+    def run(self):
+        while not self.stoprequest.isSet():
+            events = self.sel.select(timeout=0.5)
+            for key, _ in events:
+                sock = key.fileobj
+                # incoming message from remote server, s
+                data = sock.recv(4096)
+                if not data:
+                    print('\nDisconnected from chat server')
                 else:
-                    # user entered a message
-                    msg = sys.stdin.readline()
-                    self.sock.send(msg.encode())
-                    sys.stdout.write('[Me] ')
-                    sys.stdout.flush()
+                    # print data
+                    # print("received:", (data.decode()))
+                    self.output_q.put({'cmd': 2, 'body': data.decode()})
 
-'''
+    def join(self, timeout=None):
+        self.stoprequest.set()
+        super(Receiver, self).join(timeout)
 
 
 def main():
