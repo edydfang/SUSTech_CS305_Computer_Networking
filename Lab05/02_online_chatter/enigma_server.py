@@ -8,6 +8,7 @@ import socket
 import selectors
 import logging
 import sys
+import json
 
 SERVER_IP = "0.0.0.0"
 SERVER_PORT = 7654
@@ -55,7 +56,7 @@ class ChatServer(object):
                         # exception
                     except OSError:
                         self.broadcast(sock,
-                                       "Client (%s, %s) is offline\n" % str(sock.getpeername()))
+                                       "::Server::offline::[%s:%s]" % str(sock.getpeername()))
                         continue
         self.server_socket.close()
 
@@ -66,9 +67,11 @@ class ChatServer(object):
         sockfd, addr = self.server_socket.accept()
         self.connection_list.append(sockfd)
         self.sel.register(sockfd, selectors.EVENT_READ)
-        logging.info("Client (%s, %s) connected", *addr)
-        self.broadcast(sockfd, "[%s:%s] entered our chatting room\n" % addr)
         self.addr[sockfd] = sockfd.getpeername()
+        sockfd.send(
+            ("::Server::json::" + json.dumps(list(self.addr.values()))).encode())
+        logging.info("Client (%s, %s) connected", *addr)
+        self.broadcast(sockfd, "::Server::online::[%s:%s]" % addr)
 
     def process_message(self, sock):
         '''
@@ -78,8 +81,10 @@ class ChatServer(object):
             data = sock.recv(RECV_BUFFER)
         except ConnectionError:
             self.connection_list.remove(sock)
+            del self.addr[sock]
             self.sel.unregister(sock)
-            logging.info("Client (%s, %s) disconnected", *self.addr[sock])
+            logging.info(
+                "::Server::offline::Client (%s, %s) disconnected", *self.addr[sock])
             sock.close()
             return
         if data:
@@ -92,9 +97,10 @@ class ChatServer(object):
             self.connection_list.remove(sock)
             self.sel.unregister(sock)
             addr = sock.getpeername()
+            del self.addr[sock]
             logging.info("Client (%s, %s) disconnected", *addr)
             # at this stage, no data means probably the connection has been broken
-            self.broadcast(sock, "Client (%s, %s) is offline\n" % addr)
+            self.broadcast(sock, "::Server::offline::[%s:%s]" % addr)
 
     def broadcast(self, sock, message):
         '''
@@ -111,6 +117,7 @@ class ChatServer(object):
                     # broken socket, remove it
                     if connection in self.connection_list:
                         self.connection_list.remove(connection)
+                        del self.addr[connection]
                         self.sel.unregister(sock)
 
 

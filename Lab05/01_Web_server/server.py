@@ -15,7 +15,7 @@ import os
 
 # Put in your codes here to create a TCP sever socket
 # and bind it to your server address and port number
-HOST, PORT_NUM = "127.0.0.1", 1024
+HOST, PORT_NUM = "127.0.0.1", 4000
 
 CLRF = '\r\n'
 
@@ -45,6 +45,7 @@ class Request(object):
         '''
         temp = [i.strip() for i in self._raw_request.splitlines()]
         self.start_byte = -1
+        print(temp)
         if -1 == temp[0].find('HTTP'):
             raise Exception('Incorrect Protocol')
 
@@ -190,7 +191,7 @@ def main():
         # Bind the socket to server address and server port
         #server_socket.bind((HOST, PORT_NUM))
         server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
-        server_socket.bind(('192.168.111.147', 1024))
+        server_socket.bind((HOST, PORT_NUM))
         server_socket.listen(10)
     except OSError:
         print("Port number in use. Exiting....")
@@ -213,6 +214,9 @@ def main():
                 # the value of bufsize should be a relatively small power of 2
                 # for example, 4096.
                 http_request = connection_socket.recv(1024).decode()
+                if not http_request:
+                    raise OSError
+                print(http_request)
                 # print(http_request)
                 http_request = Request(http_request)
                 # print(repr(http_request), http_request.getpath())
@@ -223,6 +227,8 @@ def main():
                 # print(header)
                 connection_socket.send(header.encode())
                 resp.send_file(connection_socket)
+            except OSError:
+                print("Detect error (Connection closed)")
             finally:
                 if connection_socket:
                     connection_socket.close()
