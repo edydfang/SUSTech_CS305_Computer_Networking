@@ -227,7 +227,7 @@ class Client(threading.Thread):
             # self.server_port = 7654
             re_result = re.search(
                 r"^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$", inputinfo['body'])
-            if re_result == None:
+            if re_result is None:
                 self.update_status("Wrong IP or Port!")
                 return
             else:

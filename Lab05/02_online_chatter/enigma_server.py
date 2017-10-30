@@ -56,7 +56,7 @@ class ChatServer(object):
                         # exception
                     except OSError:
                         self.broadcast(sock,
-                                       "::Server::offline::[%s:%s]" % str(sock.getpeername()))
+                                       "::Server::offline::[%s:%s]" % self.addr[sock])
                         continue
         self.server_socket.close()
 
