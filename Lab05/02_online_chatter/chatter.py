@@ -6,11 +6,11 @@ A GUI chat program based on UDP protocal
 
 import tkinter as tk
 from tkinter import Message, Text, Listbox, Frame
-from tkinter import Label, Entry, StringVar, END, Button
+from tkinter import Label, Entry, NORMAL, END, Button
 from tkinter import E, S, W, N, SE, NE, SW, NW, BOTH, DISABLED
 import socket
 import selectors
-import sys
+import re
 import threading
 import queue
 
@@ -23,7 +23,7 @@ class Chatwindows(tk.Tk):
     Main Chat window
     '''
 
-    def __init__(self, input_q, display_q):
+    def __init__(self, input_q, output_q):
         super().__init__()
         self.update_scaling_unit()
         # self.adjust_size()
@@ -34,7 +34,7 @@ class Chatwindows(tk.Tk):
         self.frame.grid(row=0, column=0, sticky=N + S + E + W)
         self.organize_widgets(self.frame)
         self.input_q = input_q
-        self.display_q = display_q
+        self.output_q = output_q
         self.resizable(width=False, height=False)
 
     def organize_widgets(self, frame):
@@ -44,7 +44,8 @@ class Chatwindows(tk.Tk):
         self.chatbox = Text(frame, height=20, width=35, font=12)
         self.chatbox.grid(row=0, column=0, sticky=N + S + E + W)
         self.chatbox.config(state=DISABLED)
-
+        self.chatbox.tag_config('INFO', foreground='blue')
+        self.chatbox.tag_config('ERROR', foreground='red')
         #svar = StringVar()
         #svar.trace("w", lambda name, index, mode, sv=svar: self.messagebox_onchange(sv))
         self.messagebox = Text(frame, height=5, width=35, font=12)
@@ -62,11 +63,12 @@ class Chatwindows(tk.Tk):
         self.serverentry.grid(row=3, column=0, sticky=W)
         self.connbutton = Button(
             frame, text="Connect", font=8, width=10, height=1, command=self.connect)
+
         self.connbutton.grid(row=3, column=0, sticky=E)
 
-        self.statusbar = Message(
-            frame, text='Ready to Connect', font=10, aspect=350)
-        self.statusbar.grid(row=2, rowspan=2, column=1)
+        # self.statusbar = Message(
+        #     frame, text='Ready to Connect')
+        # self.statusbar.grid(row=2, rowspan=2, column=1)
 
         frame.rowconfigure(0, weight=10)
         frame.rowconfigure(1, weight=2)
@@ -97,8 +99,36 @@ class Chatwindows(tk.Tk):
         self.minsize(width=width, height=width)
 
     def update(self):
-        self.chatbox.insert(END, 'test\n')
-        # self.after(1000, self.update)
+        if not self.output_q.empty():
+            inputinfo = self.output_q.get(True, 0.5)
+            if inputinfo['cmd'] == 1:
+                self.add_chat_record(inputinfo['body'])
+            elif inputinfo['cmd'] == 0:
+                self.add_system_record(1,inputinfo['body'])
+            print(inputinfo)
+        self.after(20, self.update)
+
+    def add_chat_record(self, message):
+        '''
+        add message to chatbox
+        '''
+        self.chatbox.config(state=NORMAL)
+        self.chatbox.insert(END, message.strip() + '\n')
+        self.chatbox.config(state=DISABLED)
+        self.chatbox.see(END)
+
+    def connection_status_changed(self):
+        pass
+
+    def add_system_record(self, infotype, info):
+        self.chatbox.config(state=NORMAL)
+        if infotype == 1:
+            self.chatbox.insert(END, "INFO:" + info.strip() + '\n', 'INFO')
+        else:
+            self.chatbox.insert(END, "BUG:" + info.strip() + '\n', 'BUG')
+        self.chatbox.config(state=DISABLED)
+        self.chatbox.see(END)
+
 
     def send_message(self):
         message = self.messagebox.get("1.0", END)
@@ -107,7 +137,7 @@ class Chatwindows(tk.Tk):
             self.messagebox.delete('1.0', END)
 
     def connect(self):
-        self.statusbar.config(text="Connecting")
+        # self.statusbar.config(text="Connecting")
         self.input_q.put({'cmd': 1, 'body': self.serverentry.get()})
 
 
@@ -119,6 +149,7 @@ class Client(threading.Thread):
     def __init__(self, input_q, output_q):
         super(Client, self).__init__()
         self.input_q = input_q
+        # output 0 change status 1 add message 2 connect successfully 3 connection fail
         self.output_q = output_q
         self.stoprequest = threading.Event()
         self.server_host = None
@@ -139,7 +170,7 @@ class Client(threading.Thread):
         while not self.stoprequest.isSet():
             try:
                 inputinfo = self.input_q.get(True, 0.5)
-                print(inputinfo)
+                # print(inputinfo)
                 self.process_input(inputinfo)
                 #filenames = list(self._files_in_dir(dirname))
                 #self.result_q.put((self.name, dirname, filenames))
@@ -157,12 +188,22 @@ class Client(threading.Thread):
         # send a message
         if inputinfo['cmd'] == 0:
             self.msg_to_send.put(inputinfo['body'])
+            self.update_message("[ME] %s" % inputinfo['body'])
+        # from GUI, connect server
         elif inputinfo['cmd'] == 1:
-            self.server_host = '127.0.0.1'
-            self.server_port = 7654
+            # self.server_host = '127.0.0.1'
+            # self.server_port = 7654
+            re_result = re.search(r"^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):(\d{1,5})$", inputinfo['body'])
+            if re_result == None:
+                self.update_status("Wrong IP or Port!")
+                return
+            else:
+                self.server_host = re_result.group(1)
+                self.server_port = int(re_result.group(2))
             self.__connect()
+        # from receiver, receive new message
         elif inputinfo['cmd'] == 2:
-            pass
+            self.update_message(inputinfo['body'])
 
     def update_status(self, message):
         self.output_q.put({'cmd': 0, 'body': message})
@@ -183,9 +224,12 @@ class Client(threading.Thread):
             self.receiver = Receiver(self.sel, self.input_q)
             self.receiver.start()
         except OSError:
-            print('Unable to connect')
+            self.update_status('Unable to connect')
+            self.output_q.put({'cmd': 4})
             return
-        print('Connected to remote host. You can start sending messages')
+        self.update_status('Connect_successfully')
+        self.output_q.put({'cmd': 2})
+        # print('Connected to remote host. You can start sending messages')
 
 
 class Sender(threading.Thread):
