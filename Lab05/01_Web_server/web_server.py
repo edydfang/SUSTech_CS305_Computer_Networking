@@ -15,7 +15,7 @@ import os
 
 # Put in your codes here to create a TCP sever socket
 # and bind it to your server address and port number
-HOST, PORT_NUM = "127.0.0.1", 4000
+HOST, PORT_NUM = "0.0.0.0", 4000
 
 CLRF = '\r\n'
 
@@ -45,7 +45,7 @@ class Request(object):
         '''
         temp = [i.strip() for i in self._raw_request.splitlines()]
         self.start_byte = -1
-        print(temp)
+        # print(temp)
         if -1 == temp[0].find('HTTP'):
             raise Exception('Incorrect Protocol')
 
@@ -149,7 +149,7 @@ class Response(object):
         _, extension = os.path.splitext(self.filename)
         mapping = {'html': 'text/html', 'htm': 'text/html', 'txt': 'text/plain',
                    'mp4': 'video/mp4', 'ogg': 'audio/ogg', 'mp3': 'audio/mpeg', 'jpg': 'image/jpeg'}
-        print(extension)
+        # print(extension)
         if extension[1:] in mapping.keys():
             return mapping[extension[1:]]
         else:
@@ -159,8 +159,6 @@ class Response(object):
         '''
         send the main body
         '''
-        if self.status == 404:
-            return
         # Send HTTP content body
         if self.offset <= self.filelen:
             self.file.seek(self.offset)
@@ -173,10 +171,10 @@ class Response(object):
             try:
                 connection.send(buff)
             except BrokenPipeError as err:
-                print("Detected remote disconnect", err)
+                # print("Detected remote disconnect", err)
                 break
             buff = self.file.read(1024)
-        print(total, self.filename)
+        # print(total, self.filename)
         self.file.close()
         return
 
@@ -216,7 +214,7 @@ def main():
                 http_request = connection_socket.recv(1024).decode()
                 if not http_request:
                     raise OSError
-                print(http_request)
+                # print(http_request)
                 # print(http_request)
                 http_request = Request(http_request)
                 # print(repr(http_request), http_request.getpath())
